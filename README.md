@@ -311,7 +311,7 @@ methods: {
 
 ### #2 Прозрачные обертки
 
-```
+```javascript
 <template>
     <input
         :value="value"
@@ -323,7 +323,7 @@ methods: {
 До этого мы уже рассматривали компоненты для базовых элементов (base-input, base-button и тд). Здесь шаблон для нашего
 base-input. В нем мы получаем через Props значение и каждый раз, когда мы вводим что-либо, эмитит событие родителю.
 
-```
+```javascript
 <BaseInput @focus.native="doSomething" />
 ```
 
@@ -335,7 +335,7 @@ base-input. В нем мы получаем через Props значение и
 
 Но может возникнуть проблема, если шаблон инпута будет таким:
 
-```
+```javascript
 <template>
     <label>
         {{ label  }}
@@ -350,7 +350,7 @@ base-input. В нем мы получаем через Props значение и
 Теперь корневым элементом нашего компонента будет label, поэтому наш @focus.native слушает фокус событие на label.
 вместо input. И вот мое решение:
 
-```
+```javascript
 <template>
     <label>
         {{ label  }}
@@ -380,13 +380,13 @@ computed: {
 в этом объекте. Это означает, что для base-input мы не должны больше использовать @focus.native, теперь мы можем рассматривать его,
 как фактический компонент input
 
-```
+```javascript
 <BaseInput @focus="doSomething" />
 ```
 
 Но есть одна дополнительная проблема.
 
- ```
+ ```javascript
  <BaseInput
     placeholder="What's your name?" 
     @focus="doSomething"
@@ -398,7 +398,7 @@ computed: {
 
 И в данном случае есть решение:
 
-```
+```javascript
 inheritAttrs: false
 ```
 
@@ -407,7 +407,7 @@ inheritAttrs: false
 обрабатываться с v-bind="$attrs". attrs - объект содержащий все аттрибуты, которые не были указаны, как props в этом 
 компоненте, но были переданы в него. 
 
-```
+```javascript
 <template>
     <label>
         {{ label  }}
