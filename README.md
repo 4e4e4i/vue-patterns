@@ -402,7 +402,7 @@ computed: {
 inheritAttrs: false
 ```
 
-Эта опция, которые вы можете добавить в конфигурацию вашего Vue компонента, которая говорит Vue, что компонент не должен
+Вы можете добавить эту опцию в конфигурацию вашего Vue компонента, которая говорит Vue, что компонент не должен
 автоматически наследовать аттрибуты корневым элементом, вместо этого мы собираемся явно указать как эти аттрибуты будут
 обрабатываться с v-bind="$attrs". attrs - объект содержащий все аттрибуты, которые не были указаны, как props в этом 
 компоненте, но были переданы в него. 
@@ -424,3 +424,187 @@ inheritAttrs: false
 
 ## Разблокированные возможности
 
+### #1 Single-Root Components
+
+```
+(Emitted value instead of an istance of Error)
+  Error compiling template:
+  
+  <div></div>
+  <div></div>
+  
+  - Component template should contain exactly one root element.
+  If you are using v-if on multiple elements, use v-else-if to chain them istead.
+```
+
+Здесь ошибка, которая возникает, когда Vue говорит "Стопэ, у тебя должен быть только один корневой элемент".
+
+К сожалению, это не всегда работает, иногда вы хотите использовать шаблон, который действительно возвращает больше чем 
+один компонент, как, например в данном примере:
+
+```javascript
+<template>
+    <ul>
+        <NavBarRoutes :routes="persistentNavRoutes" />
+        <NavBarRoutes
+            v-if="loggedIn"
+            :routes="loggedInNavRoutes"
+        />
+        <NavBarRoutes
+            v-else
+            :routes="loggedOutNavRoutes"
+        />
+    </ul>
+</template>
+``` 
+
+NavBar компонент, котрый рендерит некоторые навигационные маршруты. Но есть небольшая проблема, этот компонент
+навигационного меню имеет один корневой элемент ul, но наши navBar маршруты могут быть проблемными. 
+
+
+Потому что, если мы попытаемся сделать что-то вроде этого. 
+
+```javascript
+<template>
+    <li
+        v-for"route in routes"
+        :key="route.name"
+    >
+        <router-link :to="route">
+            {{ route.title }}
+        </router-link>
+    </li>
+<template>
+```
+
+Это выглядит будто бы у нас всего один корневой элемент, который является li и он всего-лишь повторяется с v-for. Но мы пытаемся
+вернуть массив элементов и Vue будет очень недоволен этим и запустит в нас ошибкой.
+
+Но есть решение:
+
+```javascript
+functional: true,
+render(h, { props }) {
+    return props.routes.map(route =>
+        <li key={route.name}>
+            <router-link to={route}>
+                {route.title}
+            </router-link>
+        </li>
+    )
+}
+```
+
+Многие люди не знают об этом, но функциональные компоненты, которые создаются с помощью render функции, могут на самом деле
+возвращать массив элементов.
+
+Здесь мы выполняем рендеринг или отображаем все наши маршруты, а затем возвращаем массив со ссылкой на маршрутизатор, 
+который является специфическим компонентом маршрутизатора Vue.
+
+### #2 Rendering non-HTML
+
+Некоторые библиотеки, например для отрисовки карт или того подобного, такие как mapBoxGL рендерят не HTML, а WebGL. И WebGl код
+выглядит примено так:
+
+
+```javascript
+// Init
+const map = new mapboxgl.Map(/* ... */)
+
+map.on('load', () => {
+    // Data
+    map.addSource(/* ... */)
+    
+    // Layers
+    map.addLayer(/* ... */)
+    map.addLayer(/* ... */)
+    
+    // Hover effects
+    map.on('mousemove', /* ... */)
+    map.on('mouseliave', /* ... */)
+})
+```
+
+
+Теперь единственная проблема в том, что это на самом деле не похоже на декларативный код Vue, который вы, возможно, полюбили.
+
+
+Я видел такие интеграции, где у вас в основном есть компонент, похожий на "да! я создан, просто зафигачу все эти вещи, и отрендерю всю карту!"
+, и этот компонент не может быть повторно использован, потому что, если вы захотите использовать другую карту, она будет отличаться.
+
+```javascript
+<MapboxMap>
+    <MapboxMarkers
+        :items="cities"
+        primary
+    >
+        <template slot-scope="city">
+            <h3>{{ city.name }}</h3>
+        </template>
+    </MapboxMarkers>
+    <MapboxNavigation />
+</MapboxMap>
+```
+
+Мы хотим иметь какое-то подобие API как сверху, чтобы мы могли указывать маркеры и навигацию, как в HTML шаблоне.
+
+И способ, которым мне нравится это делать:
+
+```javascript
+created() {
+    const { map } = this.$parent
+    map.on('load', () => {
+        map.addSource(/* ... */)
+        map.addLayer(/* ... */)
+    })
+},
+beforeDestroy() {
+    const { map } = this.$parent
+    map.on('load', () => {
+        map.removeSource(/* ... */)
+        map.removeLayer(/* ... */)
+    })
+},
+render(h) {
+    return null
+}
+```
+
+И в данном случае, чтобы вам не кричали со всех углов комнаты "Не используй $parent! это только для очень конкретных ситуаций!!"
+Так это и есть та ситуация, где использовать $parent надо. Внутри наших mapboxmarker и mapboxnavigation компонентов, как раз
+будет правильно добраться до родителя и получить map, потому что они очень тесно связанные пары компонентов. Вы точно не будете
+использовать mapboxmarker компонент без mapboxmap. И если вы хотите немного другую стратегию, если у вас более глубокая вложенность
+компонентов внутри mapbox, вы можете взглянуть на provide/inject интерфейс.
+
+И как вы заметили мы не возрвщаем шаблон, а возвращаем null. И так можно делать!
+
+Так же я хочу обратить особое внимание на шаблон slot-scope city:
+
+```javascript
+<template slot-scope="city">
+    <h3>{{ city.name }}</h3>
+</template>
+```
+
+Вы так же можете передать шаблон в дочерний компонент, который использует data, которые имеет только дочерний компонент.
+
+```javascript
+createdPopup(marker) {
+    this.removeOpenPopups()
+    
+    const popupContentVnodes = 
+        this.$scopedSLots.default(markerk.properties)
+    const popupHtml = new Vue({
+        renger: h => h('div', popupContentVnodes)
+    }).$mount().$el.innerHTML
+    
+    this.lastAddedPopup = new mapboxgl.Popup({
+        offset: this.markerOffset
+    })
+        .setLngLat(marker.geometry.coordinated)
+        .setHTML(popupHtml)
+        .addto(this.map)
+}
+```
+
+Так мы можем использовать Vue, как какой-нибудь джинерик для HTML, по-типу pug. 
